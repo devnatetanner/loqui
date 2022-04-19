@@ -14,6 +14,43 @@ snow = ['snow', 'snow-showers-day', 'snow-showers-night']
 storm = ['thunder-rain', 'thunder-showers-day', 'thunder-showers-night']
 misc = ['fog', 'wind']
 
+async def alertcheck():
+    pulledData = requests.get(weatherData).json()
+    alert = pulledData['alerts']
+    alertinformation = ""
+    if len(alert) > 0:
+        if len(alert) == 1:
+            alert = alert[0]
+            alerttime = alert['onset']
+            alerttime = alerttime[9:]
+            alerttime = alerttime[:7]
+            alerttime = datetime.strptime("%H:%M:%S")
+            alerttime = alerttime.strftime("%I:%M %p")
+            alertinformation += await unifuncs.choosePhrase([f"There is currently a {alert['event']} lasting until {alerttime}.",
+                                                             f"There is a {alert['event']} lasting until {alerttime}.",
+                                                             f"There is a {alert['event']} issued until {alerttime}"])
+        else:
+            alertinformation += await unifuncs.choosePhrase([f"There are currently {len(alerts)} active alerts.",
+                                                             f"I have found {len(alerts)} issued alerts.",
+                                                             f"There are {len(alerts)} alerts active."])
+            for alerts in alert:
+                alerttime = alerts['onset']
+                alerttime = alerttime[9:]
+                alerttime = alerttime[:7]
+                alerttime = datetime.strptime("%H:%M:%S")
+                alerttime = alerttime.strftime("%I:%M %p")
+                additionalphrase += await unifuncs.choosePhrase([f"{alerts['event']} lasting until {alerttime}.",
+                                                                 f"{alerts['event']} expiring at {alerttime}.",
+                                                                 f"{alerts['event']} issued until {alerttime}."])
+                if len(alert) - alert.index(alerts) == 1:
+                    additionalphrase = await unifuncs.choosePhrase(["And, ", "Lastly, ", "And the last alert is, "]) + additionalphrase
+                
+                alertinformation += " " + additionalphrase
+    else:
+        alertinformation = "There are no active alerts."
+
+    return alertinformation
+
 async def todayfull():
     pulledData = requests.get(weatherData).json()
     pulledday = pulledData['days'][0]
@@ -124,10 +161,118 @@ async def todayfull():
                                                     " I anticipate it being very humid outside.",
                                                     " I'd expect it to be very humid outside today."])
     
+    alerts = await alertcheck()
+    if alerts != "There are no active alerts.":
+        notes['followup'] += " " + alerts
+
     notes['followup'] += await unifuncs.choosePhrase([f" The barometric pressure is {round(pulledday['pressure'])}. The cloud cover is at {round(pulledday['cloudcover'])}%. Lastly, the windspeed is {round(pulledday['windspeed'])} miles per hour.",
                                                 f" The barometric pressure is {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are {round(pulledday['windspeed'])} miles per hour.",
                                                 f" Barometric pressure is at {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are at {round(pulledday['windspeed'])} miles per hour."])
+
+
+    notes['final'] = notes['cond'] + notes['followup']
+    day = {'data': pulledday, 'notes': notes, 'context': notes['context'], 'message':notes['final']}
+
+    return day
+
+async def currentconditions():
+    pulledData = requests.get(weatherData).json()
+    pulledday = pulledData['currentConditions']
+    notes = {}
+
+    #pressure check
+    if pulledday['pressure'] > 1018:
+        notes['clouds'] = "high"
+    elif pulledday['pressure'] <= 1018 and pulledday['pressure'] > 1013:
+        notes['clouds'] = 'moderate'
+    else:
+        notes['pressure'] = 'low'
+
+    # dew point check
+    if pulledday['dew'] > 65:
+        notes['dew'] = 'high'
+    elif pulledday['dew'] > 55 and pulledday['dew'] <= 65:
+        notes['dew'] = 'moderate'
+    else:
+        notes['dew'] = 'low'
     
+    #feels like check
+    if pulledday['feelslike'] >= 100:
+        notes['temp'] = ['very hot', 'scorching', 'blazing']
+        if notes['dew'] == 'high':
+            notes['temp'].append('humid')
+            notes['temp'].append('muggy')
+            notes['temp'].append('sticky')
+        notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
+    elif pulledday['feelslike'] >= 75 and pulledday['feelslike'] < 100:
+        notes['temp'] = ['hot', 'summery', 'spicy']
+        if notes['dew'] == 'high':
+            notes['temp'].append('humid')
+            notes['temp'].append('muggy')
+            notes['temp'].append('sticky')
+        notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
+    elif pulledday['feelslike'] >= 55 and pulledday['feelslike'] < 75:
+        notes['temp'] = await unifuncs.choosePhrase(['moderate', 'warm', 'cool'])
+    elif pulledday['feelslike'] >= 30 and pulledday['feelslike'] < 55:
+        notes['temp'] = await unifuncs.choosePhrase(['cold', 'chilly', 'crisp'])
+    else:
+        notes['temp'] = await unifuncs.choosePhrase(['very cold', 'wintry', 'frosty', 'freezing cold'])
+
+    # conditions check
+    if pulledday['icon'] in rain:
+        notes['context'] = 'bad'
+        if 'showers' in pulledday['icon']:
+            notes['cond'] = await unifuncs.choosePhrase(["It's currently lightly raining outside with " , "I'm forecasting occasional shower currently with ", "Prepare for a chance of light rain with "])
+        else:
+            notes['cond'] = await unifuncs.choosePhrase(['Expect rain with ', "I'm currently forecasting a chance of rain with ", "Prepare for rain with "])
+    elif pulledday['icon'] in cloudy:
+        notes['context'] = 'good'
+        if 'partly' in pulledday['icon']:
+            notes['cond'] = await unifuncs.choosePhrase(['Expect partly cloudy skies with ', "I'm forecasting partly cloudy skies currently with ", "Expect clouds currently with "])
+        else:
+            notes['cond'] = await unifuncs.choosePhrase(['Expect a cloudy skies with ', "I'm forecasting cloudy skies currently with ", "Prepare for nothing but clouds currently with "])
+    elif pulledday['icon'] in clear:
+        notes['context'] = 'good'
+        notes['cond'] = await unifuncs.choosePhrase(["The skies are currently clear with ", "The clouds are currently hiding, giving way to clear skies with ", 'Anticipate clear skies outside with '])
+    elif pulledday['icon'] in storm:
+        notes['context'] = 'bad'
+        if 'showers' in pulledday['icon']:
+            notes['cond'] = await unifuncs.choosePhrase(["I'd expect a storm within the next hour or so with ", "I'm currently forecasting the occasional storm with ", "Prepare for a small storm with "])
+        else:
+            notes['cond'] = await unifuncs.choosePhrase(['Expect storms currently with ', "I'm forecasting a high chance of storms currently with ", "Prepare for storms currently with "])
+    elif pulledday['icon'] in snow:
+        notes['context'] = 'bad'
+        if 'showers' in pulledday['icon']:
+            notes['cond'] = await unifuncs.choosePhrase(['Expect a chance of flurries currently with ', "I'm forecasting the occasional flurry currently with ", "Prepare for a chance of flurries with "])
+        else:
+            notes['cond'] = await unifuncs.choosePhrase([f"Expect more than {round(pulledday['snowdepth'])} inches snow outside with  ", "I'm forecasting a chance of snow currently with ", f"Prepare for {round(pulledday['snowdepth'])} inches of snow outside with "])
+    elif pulledday['icon'] in misc:
+        notes['context'] = 'bad'
+        if 'fog' in pulledday['icon']:
+            notes['cond'] = await unifuncs.choosePhrase(["I'd expect fog outside currently with ", "I'm currently forecasting a high chance fog with ", "Prepare for a high chance of fog with "])
+        else:
+            notes['cond'] = await unifuncs.choosePhrase(["I'd expect ferocious winds outside currently with ", "I'm currently forecasting high wind speeds with ", "Prepare for high wind speeds with "])
+
+    notes['followup'] = await unifuncs.choosePhrase([f"{notes['temp']} temperatures around {round(pulledday['feelslike'])} degrees.",
+                                              f"temperatures around {round(pulledday['feelslike'])} degrees making it {notes['temp']}."])
+    if notes['dew'] == "moderate":
+        notes['followup'] += await unifuncs.choosePhrase([" I'm also expecting it to be humid outside.",
+                                                    " I anticipate it being humid outside.",
+                                                    " I'd expect it to be humid outside."])
+    if notes['dew'] == "high":
+        notes['followup'] += await unifuncs.choosePhrase([" I'm also expecting it to be very humid outside.",
+                                                    " I anticipate it being very humid outside.",
+                                                    " I'd expect it to be very humid outside."])
+
+    alerts = await alertcheck()
+    if alerts != "There are no active alerts.":
+        notes['followup'] += " " + alerts 
+
+    notes['followup'] += await unifuncs.choosePhrase([f" The barometric pressure is {round(pulledday['pressure'])}. The cloud cover is at {round(pulledday['cloudcover'])}%. Lastly, the windspeed is {round(pulledday['windspeed'])} miles per hour.",
+                                                f" The barometric pressure is {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are {round(pulledday['windspeed'])} miles per hour.",
+                                                f" Barometric pressure is at {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are at {round(pulledday['windspeed'])} miles per hour."])
+
+
     notes['final'] = notes['cond'] + notes['followup']
     day = {'data': pulledday, 'notes': notes, 'context': notes['context'], 'message':notes['final']}
 
@@ -828,173 +973,321 @@ async def weekconditions(condition):
             return phrase
     elif condition == 'storm':
         if stormcount == 0:
-            return f"I've not forecasted any storms this week."
+            if raincount > 0:
+                phrase = f"I haven't forecasted any storms this week, but I am expecting rain."
+                for day in raindays:
+                    if (raindays.index(day) == len(raindays) - 1) and (len(raindays) != 1):
+                        phrase += " and " + day
+                    else:
+                        phrase += " " + day
+                return phrase
+            else:
+                return f"I've not forecasted any storms this week."
         else:
             return f"I've forecasted {stormcount} days of snow this week. {' '.join(stormdays)}"
 
-async def finddetail(sentence, day):
+async def finddetail(sentence, day, current=False):
     if 'pressure' in sentence:
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting a barometic pressure of {round(day['pressure'])} on {day['dayname']}.",
-                                             f"{day['dayname']} has a barometric pressure of {round(day['pressure'])}.",
-                                             f"Expect an atmospheric pressure of {round(day['pressure'])} on {day['dayname']}."])
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a barometic pressure of {round(day['pressure'])} currently.",
+                                                f"There is currently a barometric pressure of {round(day['pressure'])}.",
+                                                f"Expect an atmospheric pressure of {round(day['pressure'])} outside."])   
+        else:        
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a barometic pressure of {round(day['pressure'])} on {day['dayname']}.",
+                                                f"{day['dayname']} has a barometric pressure of {round(day['pressure'])}.",
+                                                f"Expect an atmospheric pressure of {round(day['pressure'])} on {day['dayname']}."])
         return phrase
-    elif 'rain' in sentence:
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting a precipitation chance of {round(day['precipprob'])}% on {day['dayname']}.",
-                                             f"{day['dayname']} has a precipitation chance of {round(day['precipprob'])}%.",
-                                             f"Expect a precipitation chance of {round(day['precipprob'])}% on {day['dayname']}."])
+    elif 'rain' in sentence or 'rainy' in sentence:
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a precipitation chance of {round(day['precipprob'])}% currently.",
+                                                f"There is currently a precipitation chance of {round(day['precipprob'])}%.",
+                                                f"Expect a precipitation chance of {round(day['precipprob'])}%."])        
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a precipitation chance of {round(day['precipprob'])}% on {day['dayname']}.",
+                                                f"{day['dayname']} has a precipitation chance of {round(day['precipprob'])}%.",
+                                                f"Expect a precipitation chance of {round(day['precipprob'])}% on {day['dayname']}."])
         return phrase
     elif 'dew' in sentence:
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting a dew point of {round(day['dew'])} degrees on {day['dayname']}.",
-                                             f"{day['dayname']} has a dew point of {round(day['dew'])} degrees.",
-                                             f"Expect a dew point of {round(day['dew'])} degrees on {day['dayname']}."])
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a dew point of {round(day['dew'])} degrees currently.",
+                                                f"There is currently a dew point of {round(day['dew'])} degrees.",
+                                                f"Expect a dew point of {round(day['dew'])} degrees."])
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a dew point of {round(day['dew'])} degrees on {day['dayname']}.",
+                                                f"{day['dayname']} has a dew point of {round(day['dew'])} degrees.",
+                                                f"Expect a dew point of {round(day['dew'])} degrees on {day['dayname']}."])
         return phrase
     elif 'feels' in sentence or 'feelslike' in sentence:
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting a feels like temperature of {round(day['feelslike'])} degrees on {day['dayname']}.",
-                                             f"{day['dayname']} has a feels like temperature of {round(day['feelslike'])} degrees.",
-                                             f"Expect a feels like temperature of {round(day['feelslike'])} degrees on {day['dayname']}."])
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a feels like temperature of {round(day['feelslike'])} degrees currently.",
+                                                f"There is currently a feels like temperature of {round(day['feelslike'])} degrees.",
+                                                f"Expect a feels like temperature of {round(day['feelslike'])}."])            
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a feels like temperature of {round(day['feelslike'])} degrees on {day['dayname']}.",
+                                                f"{day['dayname']} has a feels like temperature of {round(day['feelslike'])} degrees.",
+                                                f"Expect a feels like temperature of {round(day['feelslike'])} degrees on {day['dayname']}."])
         return phrase
     elif 'high' in sentence or "highs" in sentence:
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting a high of {round(day['tempmax'])} degrees on {day['dayname']}.",
-                                             f"{day['dayname']} has a high of {round(day['tempmax'])} degrees.",
-                                             f"Expect a high of {round(day['tempmax'])} degrees on {day['dayname']}."])
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a high of {round(day['tempmax'])} degrees currently.",
+                                                f"There is currently a high of {round(day['tempmax'])} degrees.",
+                                                f"Expect a high of {round(day['tempmax'])} degrees."])
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a high of {round(day['tempmax'])} degrees on {day['dayname']}.",
+                                                f"{day['dayname']} has a high of {round(day['tempmax'])} degrees.",
+                                                f"Expect a high of {round(day['tempmax'])} degrees on {day['dayname']}."])
         return phrase   
     elif 'low' in sentence or "lows" in sentence:
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting a low of {round(day['tempmin'])} degrees on {day['dayname']}.",
-                                             f"{day['dayname']} has a low of {round(day['tempmin'])} degrees.",
-                                             f"Expect a low of {round(day['tempmin'])} degrees on {day['dayname']}."])
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a low of {round(day['tempmin'])} degrees currently.",
+                                                f"There is currently a low of {round(day['tempmin'])} degrees.",
+                                                f"Expect a low of {round(day['tempmin'])} degrees."])            
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a low of {round(day['tempmin'])} degrees on {day['dayname']}.",
+                                                f"{day['dayname']} has a low of {round(day['tempmin'])} degrees.",
+                                                f"Expect a low of {round(day['tempmin'])} degrees on {day['dayname']}."])
         return phrase    
     elif 'temperature' in sentence or 'temp' in sentence or "temps" in sentence or "temperatures" in sentence:
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting an average temperature of {round(day['temp'])} degrees on {day['dayname']}.",
-                                             f"{day['dayname']} has a temperature of {round(day['temp'])} degrees.",
-                                             f"Expect an average temperature of {round(day['temp'])} degrees on {day['dayname']}."])
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting an average temperature of {round(day['temp'])} degrees currently.",
+                                                f"There is currently a temperature of {round(day['temp'])} degrees.",
+                                                f"Expect an average temperature of {round(day['temp'])} degrees."])            
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting an average temperature of {round(day['temp'])} degrees on {day['dayname']}.",
+                                                f"{day['dayname']} has a temperature of {round(day['temp'])} degrees.",
+                                                f"Expect an average temperature of {round(day['temp'])} degrees on {day['dayname']}."])
         return phrase
     elif 'cloud' in sentence and 'cover' in sentence or "cloud" in sentence and "coverage" in sentence:
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting {round(day['cloudcover'])}% cloud coverage on {day['dayname']}.",
-                                             f"{day['dayname']} has a cloud coverage of {round(day['cloudcover'])}%.",
-                                             f"Expect {round(day['temp'])}% cloud coverage on {day['dayname']}."])
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting {round(day['cloudcover'])}% cloud coverage currently.",
+                                                f"There is currently a cloud coverage of {round(day['cloudcover'])}%.",
+                                                f"Expect a {round(day['temp'])}% cloud coverage."])
+
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting {round(day['cloudcover'])}% cloud coverage on {day['dayname']}.",
+                                                f"{day['dayname']} has a cloud coverage of {round(day['cloudcover'])}%.",
+                                                f"Expect a {round(day['temp'])}% cloud coverage on {day['dayname']}."])
         return phrase
     elif ('uv' in sentence and 'index' in sentence) or 'uvi' in sentence or "uv" in sentence:
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting a U V index of {round(day['uvindex'])} on {day['dayname']}.",
-                                             f"{day['dayname']} has a U V index of {round(day['uvindex'])}.",
-                                             f"Expect a U V index of {round(day['uvindex'])} on {day['dayname']}."])
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a U V index of {round(day['uvindex'])} currently.",
+                                                  f"There is currently a U V index of {round(day['uvindex'])}.",
+                                                  f"Expect a U V index of {round(day['uvindex'])}."])
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a U V index of {round(day['uvindex'])} on {day['dayname']}.",
+                                                  f"{day['dayname']} has a U V index of {round(day['uvindex'])}.",
+                                                  f"Expect a U V index of {round(day['uvindex'])} on {day['dayname']}."])
         return phrase
-    elif 'sunrise' in sentence:
+    elif 'sunrise' in sentence or 'rise' in sentence:
         returntime = datetime.strptime(day['sunrise'], "%H:%M:%S")
         returntime = returntime.strftime("%I:%M %p")
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting a sunrise time around {returntime} on {day['dayname']}.",
-                                             f"{day['dayname']} has a sunrise time of {returntime}.",
-                                             f"Expect the sun to rise around {returntime} on {day['dayname']}."])
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a sunrise time around {returntime}.",
+                                                f"The sun is expected to rise around {returntime}.",
+                                                f"Expect the sun to rise around {returntime}."])        
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a sunrise time around {returntime} on {day['dayname']}.",
+                                                f"{day['dayname']} has a sunrise time of {returntime}.",
+                                                f"Expect the sun to rise around {returntime} on {day['dayname']}."])
         return phrase
-    elif 'sunset' in sentence:
+    elif 'sunset' in sentence or 'sun' in sentence:
         returntime = datetime.strptime(day['sunset'], "%H:%M:%S")
         returntime = returntime.strftime("%I:%M %p")
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting a sunset time around {returntime} on {day['dayname']}.",
-                                             f"{day['dayname']} has a sunset time of {returntime}.",
-                                             f"Expect the sun to set around {returntime} on {day['dayname']}."])
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a sunset time around {returntime}.",
+                                                f"The sun is expected to set around {returntime}.",
+                                                f"Expect the sun to set around {returntime}."])        
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting a sunset time around {returntime} on {day['dayname']}.",
+                                                f"{day['dayname']} has a sunset time of {returntime}.",
+                                                f"Expect the sun to set around {returntime} on {day['dayname']}."])
         return phrase
-    elif ("wind" in sentence and "speed" in sentence) or ("winds" in sentence or "speeds" in sentence) :
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting wind speeds around {round(day['windspeed'])} miles per hour on {day['dayname']}.",
-                                             f"{day['dayname']} has wind speeds around {round(day['windspeed'])} miles per hour.",
-                                             f"Expect wind speeds around {round(day['windspeed'])} miles per hour on {day['dayname']}."])        
+    elif ("wind" in sentence and "speed" in sentence) or ("winds" in sentence or "speeds" in sentence) or 'windy' in sentence:
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting wind speeds around {round(day['windspeed'])} miles per hour currently.",
+                                                f"The current wind speeds are around {round(day['windspeed'])} miles per hour.",
+                                                f"Expect wind speeds around {round(day['windspeed'])} miles per hour."]) 
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting wind speeds around {round(day['windspeed'])} miles per hour on {day['dayname']}.",
+                                                f"{day['dayname']} has wind speeds around {round(day['windspeed'])} miles per hour.",
+                                                f"Expect wind speeds around {round(day['windspeed'])} miles per hour on {day['dayname']}."])        
         return phrase
-    elif ("wind" in sentence and "gust" in sentence) or ("winds" in sentence or "gusts" in sentence) :
-        phrase = await unifuncs.choosePhrase([f"I'm forecasting wind gusts around {round(day['windgust'])} miles per hour on {day['dayname']}.",
-                                             f"{day['dayname']} has wind gusts around {round(day['windgust'])} miles per hour.",
-                                             f"Expect wind gusts around {round(day['windgust'])} miles per hour on {day['dayname']}."])        
+    elif ("wind" in sentence and "gust" in sentence) or ("winds" in sentence or "gusts" in sentence):
+        if current == True:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting wind gusts around {round(day['windspeed'])} miles per hour currently.",
+                                                f"The current wind gusts are around {round(day['windspeed'])} miles per hour.",
+                                                f"Expect wind gusts around {round(day['windspeed'])} miles per hour."]) 
+        else:
+            phrase = await unifuncs.choosePhrase([f"I'm forecasting wind gusts around {round(day['windspeed'])} miles per hour on {day['dayname']}.",
+                                                f"{day['dayname']} has wind gusts around {round(day['windspeed'])} miles per hour.",
+                                                f"Expect wind gusts around {round(day['windspeed'])} miles per hour on {day['dayname']}."])       
         return phrase
     elif 'severe' in sentence or 'risk' in sentence:
-        if day['severerisk'] <= 15:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting no chance of severe weather on {day['dayname']}.",
-                                                  f"{day['dayname']} has no chance of severe weather.",
-                                                  f"Expect no chance of severe weather on {day['dayname']}."])        
-            return phrase
-        elif day['severerisk'] > 15 and day['severerisk'] < 30:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting a low risk of severe weather on {day['dayname']}.",
-                                                  f"{day['dayname']} has a low risk of severe weather.",
-                                                  f"Expect a low risk of severe weather on {day['dayname']}."])        
-            return phrase
-        elif day['severerisk'] > 29 and day['severerisk'] < 60:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting a moderate risk of severe weather on {day['dayname']}.",
-                                                  f"{day['dayname']} has a moderate risk of severe weather.",
-                                                  f"Expect a moderate risk of severe weather on {day['dayname']}."])        
-            return phrase
-        else:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting a high risk of severe weather on {day['dayname']}.",
-                                                  f"{day['dayname']} has a high risk of severe weather.",
-                                                  f"Expect a high risk of severe weather on {day['dayname']}."])        
-            return phrase
+        if 'severerisk' in day:
+            if current == True:
+                if day['severerisk'] <= 15:
+                    phrase = await unifuncs.choosePhrase([f"I'm forecasting no chance of severe weather currently.",
+                                                        f"Currently, there is no chance of severe weather.",
+                                                        f"Expect no chance of severe weather."])        
+                    return phrase
+                elif day['severerisk'] > 15 and day['severerisk'] < 30:
+                    phrase = await unifuncs.choosePhrase([f"I'm forecasting a low risk of severe weather currently.",
+                                                        f"Currently, there is a low risk of severe weather.",
+                                                        f"Expect a low risk of severe weather."])        
+                    return phrase
+                elif day['severerisk'] > 29 and day['severerisk'] < 60:
+                    phrase = await unifuncs.choosePhrase([f"I'm forecasting a moderate risk of severe weather currently.",
+                                                        f"Currently, there is a moderate risk of severe weather.",
+                                                        f"Expect a moderate risk of severe weather."])         
+                    return phrase
+                else:
+                    phrase = await unifuncs.choosePhrase([f"I'm forecasting a high risk of severe weather currently.",
+                                                        f"Currently, there is a high risk of severe weather.",
+                                                        f"Expect a high risk of severe weather."])          
+                    return phrase                
+            else:
+                if day['severerisk'] <= 15:
+                    phrase = await unifuncs.choosePhrase([f"I'm forecasting no chance of severe weather on {day['dayname']}.",
+                                                        f"{day['dayname']} has no chance of severe weather.",
+                                                        f"Expect no chance of severe weather on {day['dayname']}."])        
+                    return phrase
+                elif day['severerisk'] > 15 and day['severerisk'] < 30:
+                    phrase = await unifuncs.choosePhrase([f"I'm forecasting a low risk of severe weather on {day['dayname']}.",
+                                                        f"{day['dayname']} has a low risk of severe weather.",
+                                                        f"Expect a low risk of severe weather on {day['dayname']}."])        
+                    return phrase
+                elif day['severerisk'] > 29 and day['severerisk'] < 60:
+                    phrase = await unifuncs.choosePhrase([f"I'm forecasting a moderate risk of severe weather on {day['dayname']}.",
+                                                        f"{day['dayname']} has a moderate risk of severe weather.",
+                                                        f"Expect a moderate risk of severe weather on {day['dayname']}."])        
+                    return phrase
+                else:
+                    phrase = await unifuncs.choosePhrase([f"I'm forecasting a high risk of severe weather on {day['dayname']}.",
+                                                        f"{day['dayname']} has a high risk of severe weather.",
+                                                        f"Expect a high risk of severe weather on {day['dayname']}."])        
+                    return phrase
+        else: 
+            return "There is no chance of severe weather."
     elif "moon" in sentence or ("moon" in sentence and "phase" in sentence) or "lunar" in sentence:
-        if day['moonphase'] == 0:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting a new moon on {day['dayname']}.",
-                                                  f"The moon phase on {day['dayname']} is new moon.",
-                                                  f"Expect a new moon on {day['dayname']}."])        
-            return phrase
-        elif day['moonphase'] < 0.25 and day['moonphase'] > 0:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting a waxing crescent on {day['dayname']}.",
-                                                  f"The moon phase on {day['dayname']} is waxing crescent.",
-                                                  f"Expect a waxing crescent on {day['dayname']}."])        
-            return phrase
-        elif day['moonphase'] == .25:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting the first quarter on {day['dayname']}.",
-                                                  f"The moon phase on {day['dayname']} is first quarter.",
-                                                  f"Expect the first quarter on {day['dayname']}."])        
-            return phrase
-        elif day['moonphase'] < 0.5 and day['moonphase'] > 0.25:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting a waxing gibbous on {day['dayname']}.",
-                                                  f"The moon phase on {day['dayname']} is waxing gibbous.",
-                                                  f"Expect a waxing gibbous on {day['dayname']}."])        
-            return phrase
-        elif day['moonphase'] == .5:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting a full moon on {day['dayname']}.",
-                                                  f"The moon phase on {day['dayname']} is full moon.",
-                                                  f"Expect a full moon on {day['dayname']}."])        
-            return phrase        
-        elif day['moonphase'] < 0.75 and day['moonphase'] > 0.5:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting a waning gibbous on {day['dayname']}.",
-                                                  f"The moon phase on {day['dayname']} is waning gibbous.",
-                                                  f"Expect a waning gibbous on {day['dayname']}."])        
-            return phrase
-        elif day['moonphase'] == .75:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting the last quarter on {day['dayname']}.",
-                                                  f"The moon phase on {day['dayname']} is last quarter.",
-                                                  f"Expect the last quarter on {day['dayname']}."])        
-            return phrase                
-        elif day['moonphase'] < 1 and day['moonphase'] > 0.75:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting a waning crescent on {day['dayname']}.",
-                                                  f"The moon phase on {day['dayname']} is waning crescent.",
-                                                  f"Expect a waning crescent on {day['dayname']}."])        
-            return phrase
+        if current == True:
+            if day['moonphase'] == 0:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a new moon.",
+                                                    f"The moon phase is new moon.",
+                                                    f"Expect a new moon."])        
+                return phrase
+            elif day['moonphase'] < 0.25 and day['moonphase'] > 0:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a waxing crescent.",
+                                                    f"The moon phase is waxing crescent.",
+                                                    f"Expect a waxing crescent."])        
+                return phrase
+            elif day['moonphase'] == .25:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting the first quarter.",
+                                                    f"The moon phase is first quarter.",
+                                                    f"Expect the first quarter."])        
+                return phrase
+            elif day['moonphase'] < 0.5 and day['moonphase'] > 0.25:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a waxing gibbous.",
+                                                    f"The moon phase is waxing gibbous.",
+                                                    f"Expect a waxing gibbous on."])        
+                return phrase
+            elif day['moonphase'] == .5:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a full moon.",
+                                                    f"The moon phase is full moon.",
+                                                    f"Expect a full moon."])        
+                return phrase        
+            elif day['moonphase'] < 0.75 and day['moonphase'] > 0.5:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a waning gibbous.",
+                                                    f"The moon phase is waning gibbous.",
+                                                    f"Expect a waning gibbous."])        
+                return phrase
+            elif day['moonphase'] == .75:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting the last quarter.",
+                                                    f"The moon phase on is last quarter.",
+                                                    f"Expect the last quarter on."])        
+                return phrase                
+            elif day['moonphase'] < 1 and day['moonphase'] > 0.75:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a waning crescent.",
+                                                    f"The moon phase is waning crescent.",
+                                                    f"Expect a waning crescent."])        
+                return phrase
+        else:
+            if day['moonphase'] == 0:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a new moon on {day['dayname']}.",
+                                                    f"The moon phase on {day['dayname']} is new moon.",
+                                                    f"Expect a new moon on {day['dayname']}."])        
+                return phrase
+            elif day['moonphase'] < 0.25 and day['moonphase'] > 0:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a waxing crescent on {day['dayname']}.",
+                                                    f"The moon phase on {day['dayname']} is waxing crescent.",
+                                                    f"Expect a waxing crescent on {day['dayname']}."])        
+                return phrase
+            elif day['moonphase'] == .25:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting the first quarter on {day['dayname']}.",
+                                                    f"The moon phase on {day['dayname']} is first quarter.",
+                                                    f"Expect the first quarter on {day['dayname']}."])        
+                return phrase
+            elif day['moonphase'] < 0.5 and day['moonphase'] > 0.25:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a waxing gibbous on {day['dayname']}.",
+                                                    f"The moon phase on {day['dayname']} is waxing gibbous.",
+                                                    f"Expect a waxing gibbous on {day['dayname']}."])        
+                return phrase
+            elif day['moonphase'] == .5:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a full moon on {day['dayname']}.",
+                                                    f"The moon phase on {day['dayname']} is full moon.",
+                                                    f"Expect a full moon on {day['dayname']}."])        
+                return phrase        
+            elif day['moonphase'] < 0.75 and day['moonphase'] > 0.5:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a waning gibbous on {day['dayname']}.",
+                                                    f"The moon phase on {day['dayname']} is waning gibbous.",
+                                                    f"Expect a waning gibbous on {day['dayname']}."])        
+                return phrase
+            elif day['moonphase'] == .75:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting the last quarter on {day['dayname']}.",
+                                                    f"The moon phase on {day['dayname']} is last quarter.",
+                                                    f"Expect the last quarter on {day['dayname']}."])        
+                return phrase                
+            elif day['moonphase'] < 1 and day['moonphase'] > 0.75:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting a waning crescent on {day['dayname']}.",
+                                                    f"The moon phase on {day['dayname']} is waning crescent.",
+                                                    f"Expect a waning crescent on {day['dayname']}."])        
+                return phrase
     else:
         return "error?"
 
 async def grabdetail(sentence, day):
-    pulledData = requests.get(weatherData).json()
-    pulledData = pulledData['days']
-    pulledWeek = [pulledData[0], pulledData[1], pulledData[2], pulledData[3], pulledData[4], pulledData[5], pulledData[6]]
-    trueWeek = []
+    if day != "current": 
+        pulledData = requests.get(weatherData).json()
+        pulledData = pulledData['days']
+        pulledWeek = [pulledData[0], pulledData[1], pulledData[2], pulledData[3], pulledData[4], pulledData[5], pulledData[6]]
+        trueWeek = []
 
-    for fakeday in pulledWeek:
-        new = fakeday
-        dayname = datetime.strptime(fakeday['datetime'], "%Y-%m-%d")
-        dayname = dayname.strftime("%A")
-        new['dayname'] = dayname
-        trueWeek.append(fakeday)
-
-    result = ""
-
-    if day != "week":
-        if day.lower() == 'today':
-            print(day)
-            day = trueWeek[0]
-            result = await finddetail(sentence, day)
-            return result
-        else:
-            for fakeday in trueWeek:
-                if day.lower() == fakeday['dayname'].lower():
-                    day = fakeday
-                    result = await finddetail(sentence, day)
-                    return result
-    else:
         for fakeday in pulledWeek:
-            result += await finddetail(sentence, fakeday) + " "
+            new = fakeday
+            dayname = datetime.strptime(fakeday['datetime'], "%Y-%m-%d")
+            dayname = dayname.strftime("%A")
+            new['dayname'] = dayname
+            trueWeek.append(fakeday)
+
+        result = ""
+
+        if day != "week":
+            if day.lower() == 'today':
+                print(day)
+                day = trueWeek[0]
+                result = await finddetail(sentence, day)
+                return result
+            else:
+                for fakeday in trueWeek:
+                    if day.lower() == fakeday['dayname'].lower():
+                        day = fakeday
+                        result = await finddetail(sentence, day)
+                        return result
+        else:
+            for fakeday in pulledWeek:
+                result += await finddetail(sentence, fakeday) + " "
+            return result
+    else:
+        pulledData = requests.get(weatherData).json()
+        pulledday = pulledData['currentConditions']
+        result = await finddetail(sentence, pulledday, current=True)
         return result

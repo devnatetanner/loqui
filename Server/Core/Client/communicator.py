@@ -2,6 +2,7 @@ from Core.Command import executer as exe
 from Core.Universal import functions as unifunc
 from Core.Client import initialization as init
 from Core.Data import pickling
+from Skills.Memory import execute as memexe
 import asyncio
 import json
 import socket
@@ -28,6 +29,8 @@ async def clientlisten():
             if juststarted == True:
                 await init.initstart()
                 await pickling.unpackpickles()
+                await asyncio.sleep(2)
+                await memexe.init()
                 juststarted = False
 
             print(f"HOST {host} | Active and waiting for connection")

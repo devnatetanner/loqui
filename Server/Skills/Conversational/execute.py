@@ -50,25 +50,25 @@ async def whatismyname(sentence, profile, excess, literal):
     return {'result': 'completed', 'text': phrasing, 'profile': profile, 'excess': None}
 
 async def howareyou(sentence, profile, excess, literal):
-    if excess is not None and excess.has_key("queryanswered"):
+    if excess is not None and "queryanswered" in excess:
         bad = ["bad", "not good", "terrible", "awful", 'worried', 'stressed']
         tone = 'good'
         for word in bad:
-            if word in sentence:
+            if word in excess['answer']:
                 tone = 'bad'
 
         if tone  == 'good':      
             phrasing = [f"Good to hear, {profile['name']}.",
                         f"Glad to hear that, {profile['name']}.",
                         f"That's good to hear, {profile['name']}."]
-            if excess.has_key("weather") and excess['weather']['context'] == 'clear':
+            if 'weather' in excess and excess['weather']['context'] == 'clear':
                 phrasing.append("Glad to hear it. I bet the clear skies are helping.")
                 phrasing.append("Good to hear. The nice weather today should help keep your day good.")
         elif tone == "bad":
             phrasing = [f"Sorry to hear, {profile['name']}.",
                         f"Sorry to hear that, {profile['name']}.",
                         f"I'm sorry to hear that, {profile['name']}."]
-            if excess.has_key("weather") and excess['weather']['context'] == 'bad':
+            if 'weather' in excess and excess['weather']['context'] == 'bad':
                 phrasing.append("I'm sorry to hear that. The weather probably isn't helping either.")
                 phrasing.append("Sorry to hear that. Hopefully the weather will improve soon and help better your day.") 
 
@@ -92,27 +92,27 @@ skills = {
     'hello': {
         'function': hello,
         'keys': ['Hi', 'Hello', 'Howdy', 'Sup', 'Good morning', 'Good afternoon', 'Good evening', 'Hey', 'Greetings'],
-        'require': [],
-        'blacklist': ['when', 'name', 'who', 'know'],
+        'require': ['Hi', 'Hello', 'Howdy', 'Sup', 'morning', 'afternoon', 'evening', 'Hey', 'Greetings'],
+        'blacklist': ['when', 'name', 'who', 'know', 'remember'],
     },
     'time': {
         'function': time,
         'keys': ['what time is it', 'whats the time', 'what time is it now', 'what is the time', 'can you tell me the time', 'what is the current time',
                 'could you tell me the time', 'may i know the time', 'could i have the time'],
         'require': ['time'],
-        'blacklist': ['open', 'close', 'when'],
+        'blacklist': ['open', 'close', 'when', 'sun', 'sunset', 'sunrise', 'set', 'rise', 'remember'],
     },
     'whatismyname': {
         'function': whatismyname,
         'keys': ['what is my name', "who am i", "do you know who i am", "whats my name", "who is logged in", "who is using this", "do you know me"],
         'require': ['name'],
-        'blacklist': [],
+        'blacklist': ['open', 'close', 'when', 'sun', 'sunset', 'sunrise', 'set', 'rise', 'remember'],
     },
     'howareyou': {
         'function': howareyou,
         'keys': ['how are you', 'how have you been', 'hows it going', 'hows everything', 'whats up'],
-        'require': [],
-        'blacklist': ['when'],
+        'require': ["how"],
+        'blacklist': ['when', 'sunset', 'sunrise', 'set', 'rise', 'remember'],
     }
 }
 

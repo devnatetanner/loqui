@@ -21,9 +21,22 @@ class profiles():
         elif category == "clients":
             self.client.append(attribute)
 
+                
+    async def convertprofile(self):
+        newprofile = {
+            "name": self.name,
+            "mainclient": self.mainclient,
+            "key": self.key,
+            "favorites": self.favorites,
+            "details": self.details,
+            "clients": self.clients,
+        }
+        return newprofile
+        
 async def checkprofile(name, key=None):
     
     for profile in savedprofiles:
         if (profile.name == name.lower() or profile.name in name.lower()) and (not key or (key.lower() and profile.key == key.lower())):
             return True, profile
+            
     return False

@@ -10,6 +10,12 @@ async def todayweather(sentence, profile, excess, literal):
 
     return {'result': 'completed', 'text': day['message'], 'profile': profile, 'excess': {'weather': day}}
 
+async def currentconditions(sentence, profile, excess, literal):
+
+    day = await forecast.currentconditions()
+
+    return {'result': 'completed', 'text': day['message'], 'profile': profile, 'excess': {'weather': day}}
+
 async def sevendayweather(sentence, profile, excess, literal):
 
     week = await forecast.sevenday()
@@ -54,6 +60,8 @@ async def precise(sentence, profile, excess, literal):
             day = 'sunday'
         elif 'sunday' in today:
             day = 'monday'
+    elif "current" in sentence or "currently" in sentence:
+        day = 'current'
     elif "week" in sentence:
         day = "week"
     else:
@@ -118,50 +126,66 @@ async def weekconditions(sentence, profile, excess, literal):
 
     return {'result': 'completed', 'text': result, 'profile': profile, 'excess': None}
 
-        
+async def alertcheck(sentence, profile, excess, literal):
+    
+    result = await forecast.alertcheck()
+
+    return {'result': 'completed', 'text': result, 'profile': profile, 'excess': None}
 
 skills = {
     'todayweather': {
         'function': todayweather,
-        'keys': ['what is the weather today', 'whats the weather today', 'what is the weather like', 'whats is it like outside', 'what is todays weather'],
-        'require': ['weather'],
-        'blacklist': ['tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', "week", 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions' , 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar'],
+        'keys': ['what is the weather today', 'whats the weather today', 'what should i expect today', 'what is todays weather', 'what is it like today'],
+        'require': ['weather', 'today'],
+        'blacklist': ['remember', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', "week", 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions', 'severe', 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar'],
+    },
+    'currentconditions': {
+        'function': currentconditions,
+        'keys': ['what is the weather currently', 'whats the weather currently', 'what should i expect currently', 'what is the current weather', 'what is it like outside', 'what should i expect outside', 'what is happening outside', 'what is the weather'],
+        'require': ['weather', 'current', 'currently'],
+        'blacklist': ['remember', 'today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', "week", 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions', 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar'],
     },
     'sevendayweather': {
         'function': sevendayweather,
         'keys': ['what is the weather this week', 'whats the weather this week', 'what is the weather like this week', 'whats is it like outside this week', 'what is this weeks weather'],
         'require': ['weather', 'week', 'seven'],
-        'blacklist': ['highs', 'lows', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', "today", 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions' , 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar'],
+        'blacklist': ['remember', 'highs', 'lows', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', "today", 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions' , 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar'],
     },
     'fivedayweather': {
         'function': fivedayweather,
         'keys': ['what is the five day forecast', 'whats the five day forecast', 'what is the five day outlook', 'what is the five day forecast this week', 'what is this weeks five day forecast'],
         'require': ['forecast', 'week', 'five'],
-        'blacklist': ['highs', 'lows', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', "today", 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions' , 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar'],
+        'blacklist': ['remember', 'highs', 'lows', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', "today", 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions' , 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar'],
     },
     'precise': {
         'function': precise,
         'keys': [],
-        'require': ['this week', 'week', 'today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', "today", 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions' , 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar'],
-        'blacklist': ['weather', 'snow', 'icy', 'ice', 'times', 'how', 'many', 'clear'],
+        'require': ['current', 'currently', 'this week', 'week', 'today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', "today", 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'severe', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions' , 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar'],
+        'blacklist': ['remember', 'weather', 'snow', 'icy', 'ice', 'times', 'how', 'many', 'clear'],
     },
     'preciseday':{
         'function': preciseday,
         'keys':[],
         'require': ['weather'],
-        'blacklist': ['today', 'week', 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions' , 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar', 'clear']
+        'blacklist': ['remember', 'today', 'week', 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'severe', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions' , 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar', 'clear']
     },
     'weekconditions':{
         'function': weekconditions,
         'keys':[],
         'require':['storm', 'stormy', 'stormy weather', 'severe weather', 'rain', 'rainy weather', 'rainy', 'clear', 'clear weather', 'calm', 'calm skies', 'clear skies', 'snow', 'snowy', 'icy', 'ice', 'cloudy', 'clouds', 'cloud', 'cloudy skies', 'weather', 'week'],
-        'blacklist': [],
+        'blacklist': ['remember', 'severe'],
     },
+    'alertcheck':{
+        'function': alertcheck,
+        'keys':["are there any alerts", "are there any weather alerts", "what are the active weather alerts", "what are the active alerts", "are there any active alerts"],
+        'require': ['alert', 'alerts', 'weather', 'active'],
+        'blacklist': ['remember'],
+    }
 }
 
 
 details = ['pressure', 'highs', 'lows', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions' , 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar']
-days = ['today', 'week', 'this week', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+days = ['currently', 'current', 'today', 'week', 'this week', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
 secondarydetails = ['storm', 'stormy', 'stormy weather', 'severe weather', 'rain', 'rainy weather', 'rainy', 'clear', 'clear weather', 'calm', 'calm skies', 'clear skies', 'snow', 'snowy', 'icy', 'ice', 'cloudy', 'clouds', 'cloud', 'cloudy skies']
 
 for detail in secondarydetails:
@@ -190,7 +214,7 @@ for word in details:
             skills['precise']['keys'].append(f"whats is {word} like {day} ")
             skills['precise']['keys'].append(f"what are {day}s {word}")
 for day in days:
-    if day != "today" and day != "this week" and day != "week":
+    if day != "today" and day != "this week" and day != "week" and day != "current" and day != "currently":
         skills['preciseday']['keys'].append(f"what is the weather on {day}")
         skills['preciseday']['keys'].append(f"whats the weather on {day}")
         skills['preciseday']['keys'].append(f"what is the weather like on {day}")

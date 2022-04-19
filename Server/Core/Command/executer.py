@@ -20,7 +20,8 @@ async def grade(gradedkey, gradingkeys):
             for word in gradedkey:
                 if word in newword or word == newword:
                     totalpoints += 1
-        
+                if word is "remember" and "remember" in newkey:
+                    totalpoints += 100        
         confidence = round((totalpoints / pointspossible) * 100)
         if highestconfidence < confidence:
             highestconfidence = confidence
@@ -43,6 +44,8 @@ async def truegrade(gradedkey, gradingkeys, require, blacklist):
                     totalpoints += 5
                 if word in blacklist:
                     totalpoints -= 1000
+                if word is "remember" and "remember" in newkey:
+                    totalpoints += 100
         confidence = round((totalpoints / pointspossible) * 100)
         if highestconfidence < confidence:
             highestconfidence = confidence
