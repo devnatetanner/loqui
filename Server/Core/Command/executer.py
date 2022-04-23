@@ -22,6 +22,10 @@ async def grade(gradedkey, gradingkeys):
                     totalpoints += 1
                 if word is "remember" and "remember" in newkey:
                     totalpoints += 100        
+                if word is "add" and "add" in newkey:
+                    totalpoints += 100
+                if word is "remind" and "remind" in newkey:
+                    totalpoints += 100
         confidence = round((totalpoints / pointspossible) * 100)
         if highestconfidence < confidence:
             highestconfidence = confidence
@@ -53,7 +57,7 @@ async def truegrade(gradedkey, gradingkeys, require, blacklist):
 
 async def exe(sentence, profile, excess):
     sentence = sentence.lower()
-    whitelist = set('abcdefghijklmnopqrstuvwxyz ')
+    whitelist = set('abcdefghijklmnopqrstuvwxyz 1234567890')
     sentence = ''.join(filter(whitelist.__contains__, sentence))
     literal = sentence 
     sentence = sentence.split(" ")

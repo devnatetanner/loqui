@@ -1,6 +1,8 @@
 from Skills.Weather import forecaster as forecast
+from Skills.Weather import settings
 
 from datetime import datetime
+import zipcodes
 
 keywords = []
 
@@ -132,6 +134,33 @@ async def alertcheck(sentence, profile, excess, literal):
 
     return {'result': 'completed', 'text': result, 'profile': profile, 'excess': None}
 
+async def settingchange(sentence, profile, excess, literal):
+
+    if "unit" in sentence or "units" in sentence:
+        if "metric" in sentence:
+            settings.settings['unit'] = 'metric'
+            phrase = "I have now updated your weather settings to forecast weather using the metric system."
+        elif "imperial" in sentence or "us" in sentence or "usa" in sentence:
+            settings.settings['unit'] = 'us'
+            phrase = "I have now updated your weather settings to forecast weather using the imperial system."
+        else:
+            phrase = "I was not able to successfully change your weather unit settings. Please specify if you'd like to change your unit to metric or imperial."
+    elif "zipcode" in sentence or ("zip" in sentence and "code" in sentence):
+        zipcode = "".join(sentence)
+        whitelist = set('1234567890')
+        zipcode = ''.join(filter(whitelist.__contains__, zipcode))
+        zipcoderes = zipcodes.is_real(zipcode)
+        if zipcoderes:
+            settings.settings['zipcodes'] = zipcode
+            phrase = f"I have now changed your weather settings to forecast weather for {zipcode}."
+        else:
+            phrase = f"I was not able to validate {zipcode} as a zipcode."
+    else:
+        phrase = "I was not able to successfully change your weather settings. I can change your units of measurement or your zipcode." 
+
+    return {'result': 'completed', 'text': phrase, 'profile': profile, 'excess': None}
+
+    
 skills = {
     'todayweather': {
         'function': todayweather,
@@ -161,7 +190,7 @@ skills = {
         'function': precise,
         'keys': [],
         'require': ['current', 'currently', 'this week', 'week', 'today', 'tomorrow', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', "today", 'pressure', 'rain', 'dew', 'feels like', 'feelslike', 'high', 'low', 'temperature', 'temp', 'cloud', 'cloud cover', 'uv index', 'uvi', 'sunrise' ,'sunset', 'sunrise time', 'sunset time', 'wind speed', 'severe', 'wind gust', 'severe risk', 'severe chance', 'risk chance', 'conditions' , 'moon', 'moon phase', 'moonphase', 'lunar phase', 'lunar'],
-        'blacklist': ['remember', 'weather', 'snow', 'icy', 'ice', 'times', 'how', 'many', 'clear'],
+        'blacklist': ['remember', 'forecast', 'weather', 'snow', 'icy', 'ice', 'times', 'how', 'many', 'clear'],
     },
     'preciseday':{
         'function': preciseday,
@@ -180,6 +209,14 @@ skills = {
         'keys':["are there any alerts", "are there any weather alerts", "what are the active weather alerts", "what are the active alerts", "are there any active alerts"],
         'require': ['alert', 'alerts', 'weather', 'active'],
         'blacklist': ['remember'],
+    },
+    "changesettings":{
+        'function': settingchange,
+        'keys':['change my unit to imperial', 'change my unit to us', 'change my unit to usa', 'change my unit to metric', 'change my weather unit to metric',
+                'change my weather unit to imperial', 'change my weather unit to us', 'change my weather unit to usa', 'change my weather unit to metric',
+                'change my zipcode to', 'change my weather zipcode to', 'change my zip code to', 'change my weather zip code to'],
+        'require': ['zipcode', 'zip', 'code', 'metric', 'imperial', 'unit', 'usa', 'us', 'change'],
+        'blacklist':[]
     }
 }
 

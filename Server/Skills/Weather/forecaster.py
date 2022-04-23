@@ -5,7 +5,6 @@ import requests
 from datetime import datetime
 
 
-weatherData = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{settings.settings['zipcode']}?unitGroup=us&key=BHFCCKY362XGLDYMK3FRKYZHB&include=fcst%2Cstats%2Calerts%2Ccurrent"
 
 cloudy = ['cloudy', 'partly-cloudy-day', 'partly-cloudy-night']
 clear = ['clear', 'clear-day', 'clear-night']
@@ -15,16 +14,17 @@ storm = ['thunder-rain', 'thunder-showers-day', 'thunder-showers-night']
 misc = ['fog', 'wind']
 
 async def alertcheck():
+    weatherData = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{settings.settings['zipcode']}?unitGroup={settings.settings['unit']}&key=BHFCCKY362XGLDYMK3FRKYZHB&include=fcst%2Cstats%2Calerts%2Ccurrent"
     pulledData = requests.get(weatherData).json()
     alert = pulledData['alerts']
     alertinformation = ""
     if len(alert) > 0:
         if len(alert) == 1:
             alert = alert[0]
-            alerttime = alert['onset']
-            alerttime = alerttime[9:]
+            alerttime = alert['ends']
+            alerttime = alerttime[11:]
             alerttime = alerttime[:7]
-            alerttime = datetime.strptime("%H:%M:%S")
+            alerttime = datetime.strptime(alerttime, "%H:%M:%S")
             alerttime = alerttime.strftime("%I:%M %p")
             alertinformation += await unifuncs.choosePhrase([f"There is currently a {alert['event']} lasting until {alerttime}.",
                                                              f"There is a {alert['event']} lasting until {alerttime}.",
@@ -34,10 +34,10 @@ async def alertcheck():
                                                              f"I have found {len(alerts)} issued alerts.",
                                                              f"There are {len(alerts)} alerts active."])
             for alerts in alert:
-                alerttime = alerts['onset']
-                alerttime = alerttime[9:]
+                alerttime = alerts['ends']
+                alerttime = alerttime[11:]
                 alerttime = alerttime[:7]
-                alerttime = datetime.strptime("%H:%M:%S")
+                alerttime = datetime.strptime(alerttime, "%H:%M:%S")
                 alerttime = alerttime.strftime("%I:%M %p")
                 additionalphrase += await unifuncs.choosePhrase([f"{alerts['event']} lasting until {alerttime}.",
                                                                  f"{alerts['event']} expiring at {alerttime}.",
@@ -52,9 +52,19 @@ async def alertcheck():
     return alertinformation
 
 async def todayfull():
+    weatherData = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{settings.settings['zipcode']}?unitGroup={settings.settings['unit']}&key=BHFCCKY362XGLDYMK3FRKYZHB&include=fcst%2Cstats%2Calerts%2Ccurrent"    
     pulledData = requests.get(weatherData).json()
     pulledday = pulledData['days'][0]
     notes = {}
+    unit = 'imp'
+
+    if settings.settings['unit'] == 'metric':
+        reftemp = (pulledday['feelslike'] * 9/5) + 32
+        dewpoint = (pulledday['dew'] * 9/5) + 32
+        unit = 'metric'
+    else:
+        reftemp = pulledday['feelslike']
+        dewpoint = pulledday['dew']
 
     #pressure check
     if pulledday['pressure'] > 1018:
@@ -65,31 +75,31 @@ async def todayfull():
         notes['pressure'] = 'low'
 
     # dew point check
-    if pulledday['dew'] > 65:
+    if dewpoint > 65:
         notes['dew'] = 'high'
-    elif pulledday['dew'] > 55 and pulledday['dew'] <= 65:
+    elif dewpoint > 55 and dewpoint <= 65:
         notes['dew'] = 'moderate'
     else:
         notes['dew'] = 'low'
     
     #feels like check
-    if pulledday['feelslike'] >= 100:
+    if reftemp >= 100:
         notes['temp'] = ['very hot', 'scorching', 'blazing']
         if notes['dew'] == 'high':
             notes['temp'].append('humid')
             notes['temp'].append('muggy')
             notes['temp'].append('sticky')
         notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
-    elif pulledday['feelslike'] >= 75 and pulledday['feelslike'] < 100:
+    elif reftemp >= 75 and reftemp < 100:
         notes['temp'] = ['hot', 'summery', 'spicy']
         if notes['dew'] == 'high':
             notes['temp'].append('humid')
             notes['temp'].append('muggy')
             notes['temp'].append('sticky')
         notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
-    elif pulledday['feelslike'] >= 55 and pulledday['feelslike'] < 75:
+    elif reftemp >= 55 and reftemp < 75:
         notes['temp'] = await unifuncs.choosePhrase(['moderate', 'warm', 'cool'])
-    elif pulledday['feelslike'] >= 30 and pulledday['feelslike'] < 55:
+    elif reftemp >= 30 and reftemp < 55:
         notes['temp'] = await unifuncs.choosePhrase(['cold', 'chilly', 'crisp'])
     else:
         notes['temp'] = await unifuncs.choosePhrase(['very cold', 'wintry', 'frosty', 'freezing cold'])
@@ -165,9 +175,14 @@ async def todayfull():
     if alerts != "There are no active alerts.":
         notes['followup'] += " " + alerts
 
-    notes['followup'] += await unifuncs.choosePhrase([f" The barometric pressure is {round(pulledday['pressure'])}. The cloud cover is at {round(pulledday['cloudcover'])}%. Lastly, the windspeed is {round(pulledday['windspeed'])} miles per hour.",
-                                                f" The barometric pressure is {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are {round(pulledday['windspeed'])} miles per hour.",
-                                                f" Barometric pressure is at {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are at {round(pulledday['windspeed'])} miles per hour."])
+    if unit == "metric":
+        notes['followup'] += await unifuncs.choosePhrase([f" The barometric pressure is {round(pulledday['pressure'])}. The cloud cover is at {round(pulledday['cloudcover'])}%. Lastly, the windspeed is {round(pulledday['windspeed'])} kilometers per hour.",
+                                                    f" The barometric pressure is {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are {round(pulledday['windspeed'])} kilometers per hour.",
+                                                    f" Barometric pressure is at {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are at {round(pulledday['windspeed'])} kilometers per hour."])
+    else:
+        notes['followup'] += await unifuncs.choosePhrase([f" The barometric pressure is {round(pulledday['pressure'])}. The cloud cover is at {round(pulledday['cloudcover'])}%. Lastly, the windspeed is {round(pulledday['windspeed'])} miles per hour.",
+                                                    f" The barometric pressure is {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are {round(pulledday['windspeed'])} miles per hour.",
+                                                    f" Barometric pressure is at {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are at {round(pulledday['windspeed'])} miles per hour."])
 
 
     notes['final'] = notes['cond'] + notes['followup']
@@ -176,9 +191,19 @@ async def todayfull():
     return day
 
 async def currentconditions():
+    weatherData = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{settings.settings['zipcode']}?unitGroup={settings.settings['unit']}&key=BHFCCKY362XGLDYMK3FRKYZHB&include=fcst%2Cstats%2Calerts%2Ccurrent"    
     pulledData = requests.get(weatherData).json()
     pulledday = pulledData['currentConditions']
     notes = {}
+    unit = 'imp'
+
+    if settings.settings['unit'] == 'metric':
+        reftemp = (pulledday['feelslike'] * 9/5) + 32
+        dewpoint = (pulledday['dew'] * 9/5) + 32
+        unit = 'metric'
+    else:
+        reftemp = pulledday['feelslike']
+        dewpoint = pulledday['dew']
 
     #pressure check
     if pulledday['pressure'] > 1018:
@@ -189,31 +214,31 @@ async def currentconditions():
         notes['pressure'] = 'low'
 
     # dew point check
-    if pulledday['dew'] > 65:
+    if dewpoint > 65:
         notes['dew'] = 'high'
-    elif pulledday['dew'] > 55 and pulledday['dew'] <= 65:
+    elif dewpoint > 55 and dewpoint <= 65:
         notes['dew'] = 'moderate'
     else:
         notes['dew'] = 'low'
     
     #feels like check
-    if pulledday['feelslike'] >= 100:
+    if reftemp >= 100:
         notes['temp'] = ['very hot', 'scorching', 'blazing']
         if notes['dew'] == 'high':
             notes['temp'].append('humid')
             notes['temp'].append('muggy')
             notes['temp'].append('sticky')
         notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
-    elif pulledday['feelslike'] >= 75 and pulledday['feelslike'] < 100:
+    elif reftemp >= 75 and reftemp < 100:
         notes['temp'] = ['hot', 'summery', 'spicy']
         if notes['dew'] == 'high':
             notes['temp'].append('humid')
             notes['temp'].append('muggy')
             notes['temp'].append('sticky')
         notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
-    elif pulledday['feelslike'] >= 55 and pulledday['feelslike'] < 75:
+    elif reftemp >= 55 and reftemp < 75:
         notes['temp'] = await unifuncs.choosePhrase(['moderate', 'warm', 'cool'])
-    elif pulledday['feelslike'] >= 30 and pulledday['feelslike'] < 55:
+    elif reftemp >= 30 and reftemp < 55:
         notes['temp'] = await unifuncs.choosePhrase(['cold', 'chilly', 'crisp'])
     else:
         notes['temp'] = await unifuncs.choosePhrase(['very cold', 'wintry', 'frosty', 'freezing cold'])
@@ -268,10 +293,14 @@ async def currentconditions():
     if alerts != "There are no active alerts.":
         notes['followup'] += " " + alerts 
 
-    notes['followup'] += await unifuncs.choosePhrase([f" The barometric pressure is {round(pulledday['pressure'])}. The cloud cover is at {round(pulledday['cloudcover'])}%. Lastly, the windspeed is {round(pulledday['windspeed'])} miles per hour.",
-                                                f" The barometric pressure is {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are {round(pulledday['windspeed'])} miles per hour.",
-                                                f" Barometric pressure is at {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are at {round(pulledday['windspeed'])} miles per hour."])
-
+    if unit == "metric":
+        notes['followup'] += await unifuncs.choosePhrase([f" The barometric pressure is {round(pulledday['pressure'])}. The cloud cover is at {round(pulledday['cloudcover'])}%. Lastly, the windspeed is {round(pulledday['windspeed'])} kilometers per hour.",
+                                                    f" The barometric pressure is {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are {round(pulledday['windspeed'])} kilometers per hour.",
+                                                    f" Barometric pressure is at {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are at {round(pulledday['windspeed'])} kilometers per hour."])
+    else:
+        notes['followup'] += await unifuncs.choosePhrase([f" The barometric pressure is {round(pulledday['pressure'])}. The cloud cover is at {round(pulledday['cloudcover'])}%. Lastly, the windspeed is {round(pulledday['windspeed'])} miles per hour.",
+                                                    f" The barometric pressure is {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are {round(pulledday['windspeed'])} miles per hour.",
+                                                    f" Barometric pressure is at {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are at {round(pulledday['windspeed'])} miles per hour."])
 
     notes['final'] = notes['cond'] + notes['followup']
     day = {'data': pulledday, 'notes': notes, 'context': notes['context'], 'message':notes['final']}
@@ -279,6 +308,7 @@ async def currentconditions():
     return day
 
 async def dayfull(day):
+    weatherData = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{settings.settings['zipcode']}?unitGroup={settings.settings['unit']}&key=BHFCCKY362XGLDYMK3FRKYZHB&include=fcst%2Cstats%2Calerts%2Ccurrent"
     pulledData = requests.get(weatherData).json()
     pulledData = pulledData['days']
     pulledWeek = [pulledData[0], pulledData[1], pulledData[2], pulledData[3], pulledData[4], pulledData[5], pulledData[6]]
@@ -294,6 +324,15 @@ async def dayfull(day):
 
     pulledday = day
     notes = {'day': day['day']}
+    unit = 'imp'
+
+    if settings.settings['unit'] == 'metric':
+        reftemp = (pulledday['feelslike'] * 9/5) + 32
+        dewpoint = (pulledday['dew'] * 9/5) + 32
+        unit = 'metric'
+    else:
+        reftemp = pulledday['feelslike']
+        dewpoint = pulledday['dew']
 
     #pressure check
     if pulledday['pressure'] > 1018:
@@ -304,31 +343,31 @@ async def dayfull(day):
         notes['pressure'] = 'low'
 
     # dew point check
-    if pulledday['dew'] > 65:
+    if dewpoint > 65:
         notes['dew'] = 'high'
-    elif pulledday['dew'] > 55 and pulledday['dew'] <= 65:
+    elif dewpoint > 55 and dewpoint <= 65:
         notes['dew'] = 'moderate'
     else:
         notes['dew'] = 'low'
     
     #feels like check
-    if pulledday['feelslike'] >= 100:
+    if reftemp >= 100:
         notes['temp'] = ['very hot', 'scorching', 'blazing']
         if notes['dew'] == 'high':
             notes['temp'].append('humid')
             notes['temp'].append('muggy')
             notes['temp'].append('sticky')
         notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
-    elif pulledday['feelslike'] >= 75 and pulledday['feelslike'] < 100:
+    elif reftemp >= 75 and reftemp < 100:
         notes['temp'] = ['hot', 'summery', 'spicy']
         if notes['dew'] == 'high':
             notes['temp'].append('humid')
             notes['temp'].append('muggy')
             notes['temp'].append('sticky')
         notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
-    elif pulledday['feelslike'] >= 55 and pulledday['feelslike'] < 75:
+    elif reftemp >= 55 and reftemp < 75:
         notes['temp'] = await unifuncs.choosePhrase(['moderate', 'warm', 'cool'])
-    elif pulledday['feelslike'] >= 30 and pulledday['feelslike'] < 55:
+    elif reftemp >= 30 and reftemp < 55:
         notes['temp'] = await unifuncs.choosePhrase(['cold', 'chilly', 'crisp'])
     else:
         notes['temp'] = await unifuncs.choosePhrase(['very cold', 'wintry', 'frosty', 'freezing cold'])
@@ -399,11 +438,16 @@ async def dayfull(day):
         notes['followup'] += await unifuncs.choosePhrase([" I'm also expecting it to be very humid.",
                                                     " I anticipate it being very humid.",
                                                     " I'd expect it to be very humid."])
-    
-    notes['followup'] += await unifuncs.choosePhrase([f" The barometric pressure is {round(pulledday['pressure'])}. The cloud cover is at {round(pulledday['cloudcover'])}%. Lastly, the windspeed is {round(pulledday['windspeed'])} miles per hour.",
-                                                f" The barometric pressure is {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are {round(pulledday['windspeed'])} miles per hour.",
-                                                f" Barometric pressure is at {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are at {round(pulledday['windspeed'])} miles per hour."])
-    
+
+    if unit == "metric":
+        notes['followup'] += await unifuncs.choosePhrase([f" The barometric pressure is {round(pulledday['pressure'])}. The cloud cover is at {round(pulledday['cloudcover'])}%. Lastly, the windspeed is {round(pulledday['windspeed'])} kilometers per hour.",
+                                                    f" The barometric pressure is {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are {round(pulledday['windspeed'])} kilometers per hour.",
+                                                    f" Barometric pressure is at {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are at {round(pulledday['windspeed'])} kilometers per hour."])
+    else:
+        notes['followup'] += await unifuncs.choosePhrase([f" The barometric pressure is {round(pulledday['pressure'])}. The cloud cover is at {round(pulledday['cloudcover'])}%. Lastly, the windspeed is {round(pulledday['windspeed'])} miles per hour.",
+                                                    f" The barometric pressure is {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are {round(pulledday['windspeed'])} miles per hour.",
+                                                    f" Barometric pressure is at {round(pulledday['pressure'])}, cloud cover is at {round(pulledday['cloudcover'])}%, and windspeeds are at {round(pulledday['windspeed'])} miles per hour."])
+
     notes['final'] = notes['cond'] + notes['followup']
 
     day = {'data': pulledday, 'notes': notes, 'context': notes['context'], 'message':notes['final']}
@@ -415,6 +459,7 @@ async def dayfull(day):
     return day
 
 async def sevenday():
+    weatherData = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{settings.settings['zipcode']}?unitGroup={settings.settings['unit']}&key=BHFCCKY362XGLDYMK3FRKYZHB&include=fcst%2Cstats%2Calerts%2Ccurrent"    
     pulledData = requests.get(weatherData).json()
     pulledData = pulledData['days']
     pulledWeek = [pulledData[0], pulledData[1], pulledData[2], pulledData[3], pulledData[4], pulledData[5], pulledData[6]]
@@ -441,6 +486,15 @@ async def sevenday():
         notes = {}
         notes['day'] = datetime.strptime(pulledday['datetime'], "%Y-%m-%d")
         notes['day'] = notes['day'].strftime("%A")
+        unit = 'imp'
+
+        if settings.settings['unit'] == 'metric':
+            reftemp = (pulledday['feelslike'] * 9/5) + 32
+            dewpoint = (pulledday['dew'] * 9/5) + 32
+            unit = 'metric'
+        else:
+            reftemp = pulledday['feelslike']
+            dewpoint = pulledday['dew']
 
         #pressure check
         if pulledday['pressure'] > 1018:
@@ -468,15 +522,15 @@ async def sevenday():
 
 
         # dew point check
-        if pulledday['dew'] > 65:
+        if dewpoint > 65:
             notes['dew'] = 'high'
-        elif pulledday['dew'] > 55 and pulledday['dew'] <= 65:
+        elif dewpoint > 55 and dewpoint <= 65:
             notes['dew'] = 'moderate'
         else:
             notes['dew'] = 'low'
         
         #feels like check
-        if pulledday['feelslike'] >= 100:
+        if reftemp >= 100:
             notes['temp'] = ['very hot', 'scorching', 'blazing']
             veryhottempcount += 1
             if notes['dew'] == 'high':
@@ -484,7 +538,7 @@ async def sevenday():
                 notes['temp'].append('muggy')
                 notes['temp'].append('sticky')
             notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
-        elif pulledday['feelslike'] >= 75 and pulledday['feelslike'] < 100:
+        elif reftemp >= 75 and reftemp < 100:
             hottempcount += 1
             notes['temp'] = ['hot', 'summery', 'spicy']
             if notes['dew'] == 'high':
@@ -492,10 +546,10 @@ async def sevenday():
                 notes['temp'].append('muggy')
                 notes['temp'].append('sticky')
             notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
-        elif pulledday['feelslike'] >= 55 and pulledday['feelslike'] < 75:
+        elif reftemp >= 55 and reftemp < 75:
             goodtempcount += 1
             notes['temp'] = await unifuncs.choosePhrase(['moderate', 'warm', 'cool'])
-        elif pulledday['feelslike'] >= 30 and pulledday['feelslike'] < 55:
+        elif reftemp >= 30 and reftemp < 55:
             coldtempcount += 1
             notes['temp'] = await unifuncs.choosePhrase(['cold', 'chilly', 'crisp'])
         else:
@@ -650,6 +704,7 @@ async def sevenday():
     return week
 
 async def fiveday():
+    weatherData = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{settings.settings['zipcode']}?unitGroup={settings.settings['unit']}&key=BHFCCKY362XGLDYMK3FRKYZHB&include=fcst%2Cstats%2Calerts%2Ccurrent"    
     pulledData = requests.get(weatherData).json()
     pulledData = pulledData['days']
     pulledWeek = [pulledData[0], pulledData[1], pulledData[2], pulledData[3], pulledData[4]]
@@ -676,6 +731,15 @@ async def fiveday():
         notes = {}
         notes['day'] = datetime.strptime(pulledday['datetime'], "%Y-%m-%d")
         notes['day'] = notes['day'].strftime("%A")
+        unit = 'imp'
+
+        if settings.settings['unit'] == 'metric':
+            reftemp = (pulledday['feelslike'] * 9/5) + 32
+            dewpoint = (pulledday['dew'] * 9/5) + 32
+            unit = 'metric'
+        else:
+            reftemp = pulledday['feelslike']
+            dewpoint = pulledday['dew']
 
         #pressure check
         if pulledday['pressure'] > 1018:
@@ -703,15 +767,15 @@ async def fiveday():
 
 
         # dew point check
-        if pulledday['dew'] > 65:
+        if dewpoint > 65:
             notes['dew'] = 'high'
-        elif pulledday['dew'] > 55 and pulledday['dew'] <= 65:
+        elif dewpoint > 55 and dewpoint <= 65:
             notes['dew'] = 'moderate'
         else:
             notes['dew'] = 'low'
         
         #feels like check
-        if pulledday['feelslike'] >= 100:
+        if reftemp >= 100:
             notes['temp'] = ['very hot', 'scorching', 'blazing']
             veryhottempcount += 1
             if notes['dew'] == 'high':
@@ -719,7 +783,7 @@ async def fiveday():
                 notes['temp'].append('muggy')
                 notes['temp'].append('sticky')
             notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
-        elif pulledday['feelslike'] >= 75 and pulledday['feelslike'] < 100:
+        elif reftemp >= 75 and reftemp < 100:
             hottempcount += 1
             notes['temp'] = ['hot', 'summery', 'spicy']
             if notes['dew'] == 'high':
@@ -727,10 +791,10 @@ async def fiveday():
                 notes['temp'].append('muggy')
                 notes['temp'].append('sticky')
             notes['temp'] = await unifuncs.choosePhrase(notes['temp'])
-        elif pulledday['feelslike'] >= 55 and pulledday['feelslike'] < 75:
+        elif reftemp >= 55 and reftemp < 75:
             goodtempcount += 1
             notes['temp'] = await unifuncs.choosePhrase(['moderate', 'warm', 'cool'])
-        elif pulledday['feelslike'] >= 30 and pulledday['feelslike'] < 55:
+        elif reftemp >= 30 and reftemp < 55:
             coldtempcount += 1
             notes['temp'] = await unifuncs.choosePhrase(['cold', 'chilly', 'crisp'])
         else:
@@ -885,6 +949,7 @@ async def fiveday():
     return week
 
 async def weekconditions(condition):
+    weatherData = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{settings.settings['zipcode']}?unitGroup={settings.settings['unit']}&key=BHFCCKY362XGLDYMK3FRKYZHB&include=fcst%2Cstats%2Calerts%2Ccurrent"    
     pulledData = requests.get(weatherData).json()
     pulledData = pulledData['days']
     pulledWeek = [pulledData[0], pulledData[1], pulledData[2], pulledData[3], pulledData[4], pulledData[5], pulledData[6]]
@@ -987,6 +1052,11 @@ async def weekconditions(condition):
             return f"I've forecasted {stormcount} days of snow this week. {' '.join(stormdays)}"
 
 async def finddetail(sentence, day, current=False):
+    unit = 'imp'
+
+    if settings.settings['unit'] == 'metric':
+        unit = 'metric'
+
     if 'pressure' in sentence:
         if current == True:
             phrase = await unifuncs.choosePhrase([f"I'm forecasting a barometic pressure of {round(day['pressure'])} currently.",
@@ -1103,24 +1173,44 @@ async def finddetail(sentence, day, current=False):
                                                 f"Expect the sun to set around {returntime} on {day['dayname']}."])
         return phrase
     elif ("wind" in sentence and "speed" in sentence) or ("winds" in sentence or "speeds" in sentence) or 'windy' in sentence:
-        if current == True:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting wind speeds around {round(day['windspeed'])} miles per hour currently.",
-                                                f"The current wind speeds are around {round(day['windspeed'])} miles per hour.",
-                                                f"Expect wind speeds around {round(day['windspeed'])} miles per hour."]) 
+        if unit == 'metric':
+            if current == True:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting wind speeds around {round(day['windspeed'])} kilometers per hour currently.",
+                                                    f"The current wind speeds are around {round(day['windspeed'])} kilometers per hour.",
+                                                    f"Expect wind speeds around {round(day['windspeed'])} kilometers per hour."]) 
+            else:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting wind speeds around {round(day['windspeed'])} kilometers per hour on {day['dayname']}.",
+                                                    f"{day['dayname']} has wind speeds around {round(day['windspeed'])} kilometers per hour.",
+                                                    f"Expect wind speeds around {round(day['windspeed'])} kilometers per hour on {day['dayname']}."])    
         else:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting wind speeds around {round(day['windspeed'])} miles per hour on {day['dayname']}.",
-                                                f"{day['dayname']} has wind speeds around {round(day['windspeed'])} miles per hour.",
-                                                f"Expect wind speeds around {round(day['windspeed'])} miles per hour on {day['dayname']}."])        
+            if current == True:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting wind speeds around {round(day['windspeed'])} miles per hour currently.",
+                                                    f"The current wind speeds are around {round(day['windspeed'])} miles per hour.",
+                                                    f"Expect wind speeds around {round(day['windspeed'])} miles per hour."]) 
+            else:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting wind speeds around {round(day['windspeed'])} miles per hour on {day['dayname']}.",
+                                                    f"{day['dayname']} has wind speeds around {round(day['windspeed'])} miles per hour.",
+                                                    f"Expect wind speeds around {round(day['windspeed'])} miles per hour on {day['dayname']}."])        
         return phrase
     elif ("wind" in sentence and "gust" in sentence) or ("winds" in sentence or "gusts" in sentence):
-        if current == True:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting wind gusts around {round(day['windspeed'])} miles per hour currently.",
-                                                f"The current wind gusts are around {round(day['windspeed'])} miles per hour.",
-                                                f"Expect wind gusts around {round(day['windspeed'])} miles per hour."]) 
+        if unit == 'metric':
+            if current == True:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting wind gusts around {round(day['windspeed'])} kilometers per hour currently.",
+                                                    f"The current wind gusts are around {round(day['windspeed'])} kilometers per hour.",
+                                                    f"Expect wind gusts around {round(day['windspeed'])} kilometers per hour."]) 
+            else:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting wind gusts around {round(day['windspeed'])} kilometers per hour on {day['dayname']}.",
+                                                    f"{day['dayname']} has wind gusts around {round(day['windspeed'])} kilometers per hour.",
+                                                    f"Expect wind gusts around {round(day['windspeed'])} kilometers per hour on {day['dayname']}."])    
         else:
-            phrase = await unifuncs.choosePhrase([f"I'm forecasting wind gusts around {round(day['windspeed'])} miles per hour on {day['dayname']}.",
-                                                f"{day['dayname']} has wind gusts around {round(day['windspeed'])} miles per hour.",
-                                                f"Expect wind gusts around {round(day['windspeed'])} miles per hour on {day['dayname']}."])       
+            if current == True:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting wind gusts around {round(day['windspeed'])} miles per hour currently.",
+                                                    f"The current wind gusts are around {round(day['windspeed'])} miles per hour.",
+                                                    f"Expect wind gusts around {round(day['windspeed'])} miles per hour."]) 
+            else:
+                phrase = await unifuncs.choosePhrase([f"I'm forecasting wind gusts around {round(day['windspeed'])} miles per hour on {day['dayname']}.",
+                                                    f"{day['dayname']} has wind gusts around {round(day['windspeed'])} miles per hour.",
+                                                    f"Expect wind gusts around {round(day['windspeed'])} miles per hour on {day['dayname']}."])        
         return phrase
     elif 'severe' in sentence or 'risk' in sentence:
         if 'severerisk' in day:
@@ -1255,6 +1345,7 @@ async def finddetail(sentence, day, current=False):
         return "error?"
 
 async def grabdetail(sentence, day):
+    weatherData = f"https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/{settings.settings['zipcode']}?unitGroup={settings.settings['unit']}&key=BHFCCKY362XGLDYMK3FRKYZHB&include=fcst%2Cstats%2Calerts%2Ccurrent"    
     if day != "current": 
         pulledData = requests.get(weatherData).json()
         pulledData = pulledData['days']

@@ -1,3 +1,4 @@
 settings = {
-    'zipcode': '74012'
+    'zipcode': '74012',
+    'unit':'us'
 }
